@@ -24,7 +24,7 @@ import ipaddress
 import socket
 import logging
 
-logger = logging.getLogger("gadgetguide_ai.admin")
+logger = logging.getLogger("tech_doc_qa.admin")
 
 router = APIRouter(
     prefix="/admin",

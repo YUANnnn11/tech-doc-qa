@@ -3,7 +3,7 @@
     <NavBar :isDark="isDark" @toggle-theme="toggleTheme" />
     <div class="center-area">
       <div class="login-card">
-        <h2 class="title">登录 GadgetGuide AI</h2>
+        <h2 class="title">登录 Tech-Doc QA</h2>
         <form @submit.prevent="handleLogin">
           <div class="form-item">
             <input

@@ -11,7 +11,7 @@ from ..database import SessionLocal
 from ..config import SECRET_KEY, ALGORITHM
 import logging
 
-logger = logging.getLogger("gadgetguide_ai")
+logger = logging.getLogger("tech_doc_qa")
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 

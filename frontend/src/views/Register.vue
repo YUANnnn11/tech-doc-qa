@@ -4,7 +4,7 @@
     <NavBar :isDark="isDark" @toggle-theme="toggleTheme" />
     <div class="center-area">
       <div class="register-card">
-        <h2 class="title">注册 GadgetGuide AI</h2>
+        <h2 class="title">注册 Tech-Doc QA</h2>
         <form @submit.prevent="handleRegister">
           <div class="form-item">
             <input

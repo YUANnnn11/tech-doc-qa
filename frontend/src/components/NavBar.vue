@@ -2,7 +2,7 @@
 <template>
   <header class="navbar">
     <div class="navbar-left">
-      <span class="app-title">GadgetGuide AI</span>
+      <span class="app-title">Tech-Doc QA</span>
     </div>
     <div class="navbar-right">
       <!-- 管理员显示“切换”按钮 -->

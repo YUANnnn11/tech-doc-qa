@@ -3,7 +3,7 @@ import logging
 from dotenv import load_dotenv
 
 # --- 日志配置 ---
-logger = logging.getLogger("gadgetguide_ai")
+logger = logging.getLogger("tech_doc_qa")
 
 # --- 加载 API 密钥 ---
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")

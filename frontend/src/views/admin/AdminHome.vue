@@ -2,7 +2,7 @@
 <template>
   <div class="admin-home">
     <h2>欢迎来到后台管理中心</h2>
-    <p>这里是 GadgetGuide AI 的管理后台。您可以通过左侧菜单快速进入各功能模块：</p>
+    <p>这里是 Tech-Doc QA 的管理后台。您可以通过左侧菜单快速进入各功能模块：</p>
 
     <ul class="features-list">
       <li>

@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from ..config import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
 import logging
 
-logger = logging.getLogger("gadgetguide_ai")
+logger = logging.getLogger("tech_doc_qa")
 
 # --- 密码加密上下文 ---
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")

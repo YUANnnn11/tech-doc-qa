@@ -12,7 +12,7 @@ from langchain_community.vectorstores import FAISS
 from .config import UPLOAD_FOLDER, FAISS_INDEX_PATH, OLLAMA_EMBEDDING_MODEL, OLLAMA_BASE_URL, CHUNK_SIZE, CHUNK_OVERLAP
 
 # --- 获取 logger 实例 ---
-logger = logging.getLogger("gadgetguide_ai.knowledge_base_processor")
+logger = logging.getLogger("tech_doc_qa.knowledge_base_processor")
 
 # 定义已处理文件记录路径
 PROCESSED_FILES_PATH = os.path.join(FAISS_INDEX_PATH, "processed_files.json")

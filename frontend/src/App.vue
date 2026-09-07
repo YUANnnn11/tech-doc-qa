@@ -13,7 +13,7 @@ const route = useRoute()
 watch(
   () => route.meta.title,
   (title) => {
-    document.title = title ? `${title} - GadgetGuide AI` : 'GadgetGuide AI'
+    document.title = title ? `${title} - Tech-Doc QA` : 'Tech-Doc QA'
   },
   { immediate: true } // 初始加载也设置标题
 )

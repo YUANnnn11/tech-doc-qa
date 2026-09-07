@@ -11,7 +11,7 @@ from langchain_ollama import OllamaEmbeddings
 from .knowledge_base_processor import load_faiss_index
 from .config import OLLAMA_EMBEDDING_MODEL, DEEPSEEK_API_KEY
 
-logger = logging.getLogger("gadgetguide_ai.qa")
+logger = logging.getLogger("tech_doc_qa.qa")
 
 DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
 DEEPSEEK_MODEL_NAME = "deepseek-chat"

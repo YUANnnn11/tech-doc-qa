@@ -4,7 +4,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 # --- 日志配置 ---
-logger = logging.getLogger("gadgetguide_ai")
+logger = logging.getLogger("tech_doc_qa")
 logger.setLevel(logging.DEBUG)
 ch = logging.StreamHandler()
 ch.setLevel(logging.DEBUG)
@@ -38,7 +38,7 @@ from backend.chat import models as chat_models
 from backend.database import Base, engine
 
 # --- 创建 FastAPI 实例 ---
-app = FastAPI(title="GadgetGuide AI API")
+app = FastAPI(title="Tech-Doc QA API")
 
 # --- 创建所有数据表（用户表、会话表、消息表等） ---
 Base.metadata.create_all(bind=engine)
@@ -67,7 +67,7 @@ async def startup_event():
 @app.get("/")
 async def read_root():
     logger.info("Root endpoint / was called")
-    return {"message": "Welcome to GadgetGuide AI API!"}
+    return {"message": "Welcome to Tech-Doc QA API!"}
 
 @app.post("/ask", response_model=Dict[str, Any])
 def ask_question_endpoint(query: str = Form(...)):
