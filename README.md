@@ -2,7 +2,7 @@
 
 基于 **RAG（检索增强生成）** 的技术文档问答系统。上传或抓取技术文档，即可对文档内容进行自然语言提问，AI 基于文档内容回答（可溯源、可流式、带反馈）。
 
-> 本项目基于开源项目 [GadgetGuide AI](https://github.com/zysyy/gadgetguide_ai-) 深度改造，保留了 RAG 核心架构，新增了流式输出、引用溯源、反馈闭环、网页抓取等功能，并将主题从「电子产品问答」改为「技术文档问答」。
+> 本项目基于开源项目 [GadgetGuide AI](https://github.com/zysyy/gadgetguide_ai-) 深度改造，重构为「技术文档智能问答」系统，在 RAG 核心架构上新增了流式输出、引用溯源、反馈闭环、网页抓取、安全加固等能力。
 
 ---
 
@@ -16,7 +16,7 @@
 - **反馈闭环**：点赞 / 点踩 / 重试，记录回答质量
 - **多轮对话**：会话管理，支持历史上下文
 - **管理员后台**：知识库管理、批量删除、热词统计
-- **安全机制**：JWT 鉴权、bcrypt 密码加密、防 XSS
+- **安全机制**：JWT 鉴权、bcrypt 密码加密、SSRF 防护、防 XSS
 
 ---
 
@@ -71,8 +71,6 @@ cd backend
 python -m venv .venv
 .venv\Scripts\activate        # Windows
 pip install -r requirements.txt
-# 注意：requirements.txt 可能不完整，需补装：
-pip install sqlalchemy "passlib[bcrypt]==4.0.1" "python-jose[cryptography]" jieba pypdf email-validator beautifulsoup4
 
 # 前端
 cd ../frontend

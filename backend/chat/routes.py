@@ -103,17 +103,15 @@ def send_message(
     # 1️⃣ 保存用户消息
     user_msg = crud.create_message(db, conversation, role=payload.role, content=payload.content)
 
-    # 2️⃣ 获取最近 N 条上下文（拼接上下文）
+    # 2️⃣ 获取最近 N 条历史（仅拼进生成 prompt，不参与检索）
     previous_msgs = crud.get_messages_by_conversation(db, conversation)
     N = 10
     previous_msgs = previous_msgs[-N:] if len(previous_msgs) > N else previous_msgs
-
     history_context = "\n".join([f"{m.role}: {m.content}" for m in previous_msgs])
-    prompt = f"{history_context}\nuser: {payload.content}"
 
-    # 3️⃣ 调用 AI，生成回复
+    # 3️⃣ 调用 AI（检索只用当前问题 payload.content，历史作为多轮上下文单独传入）
     try:
-        result = get_final_answer(prompt)
+        result = get_final_answer(payload.content, history=history_context)
         ai_content = result.get("answer", "很抱歉，未能获取到明确的回答。")
     except Exception as e:
         ai_content = f"AI内部错误：{str(e)}"
@@ -138,15 +136,14 @@ def send_message_stream(
     # 1️⃣ 保存用户消息
     crud.create_message(db, conversation, role=payload.role, content=payload.content)
 
-    # 2️⃣ 拼最近 N 条历史上下文
+    # 2️⃣ 拼最近 N 条历史（仅用于生成，不参与检索）
     previous_msgs = crud.get_messages_by_conversation(db, conversation)
     N = 10
     previous_msgs = previous_msgs[-N:] if len(previous_msgs) > N else previous_msgs
     history_context = "\n".join([f"{m.role}: {m.content}" for m in previous_msgs])
-    prompt = f"{history_context}\nuser: {payload.content}"
 
-    # 3️⃣ 准备检索上下文（复用与 get_final_answer 相同的逻辑）
-    context_chunks, is_comparison, allow_free_gen = prepare_context(prompt)
+    # 3️⃣ 准备检索上下文：只用当前问题检索，历史不作为检索输入
+    context_chunks, is_comparison, allow_free_gen = prepare_context(payload.content)
     conv_id = conversation.id  # 提前取出 id，避免流式期间 session 已关闭
 
     # 4️⃣ 流式生成并保存
@@ -156,7 +153,7 @@ def send_message_stream(
         yield f"data: {json.dumps({'sources': sources}, ensure_ascii=False)}\n\n"
 
         full_answer = []
-        for chunk in generate_answer_stream(prompt, context_chunks, is_comparison, allow_free_gen):
+        for chunk in generate_answer_stream(payload.content, context_chunks, is_comparison, allow_free_gen, history=history_context):
             full_answer.append(chunk)
             yield f"data: {json.dumps({'content': chunk}, ensure_ascii=False)}\n\n"
         # 保存 assistant 消息（用新 session，因为原请求 session 在流式期间已关闭）

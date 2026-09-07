@@ -20,6 +20,8 @@ import requests
 from bs4 import BeautifulSoup
 from pydantic import BaseModel
 from urllib.parse import urljoin, urlparse
+import ipaddress
+import socket
 import logging
 
 logger = logging.getLogger("gadgetguide_ai.admin")
@@ -290,6 +292,60 @@ def refresh_index(admin: User = Depends(admin_required)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"索引刷新出错：{str(e)}")
 
+# ==== SSRF 防护：仅允许公网 http/https，并逐跳校验重定向目标 ====
+_PRIVATE_NETWORKS = [
+    ipaddress.ip_network("0.0.0.0/8"),
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("169.254.0.0/16"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("224.0.0.0/4"),
+    ipaddress.ip_network("240.0.0.0/4"),
+    ipaddress.ip_network("::1/128"),
+    ipaddress.ip_network("fc00::/7"),
+    ipaddress.ip_network("fe80::/10"),
+]
+
+def _is_public_ip(ip_str: str) -> bool:
+    try:
+        ip = ipaddress.ip_address(ip_str)
+    except ValueError:
+        return False
+    return not any(ip in net for net in _PRIVATE_NETWORKS)
+
+def _validate_public_url(url: str):
+    """校验 URL 协议，并解析主机名确认所有 IP 均为公网地址，拒绝内网/回环/保留地址（防 SSRF）。"""
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise HTTPException(status_code=400, detail="仅支持 http/https 协议")
+    host = parsed.hostname
+    if not host:
+        raise HTTPException(status_code=400, detail="URL 缺少有效主机名")
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror:
+        raise HTTPException(status_code=400, detail="无法解析主机名")
+    for info in infos:
+        if not _is_public_ip(info[4][0]):
+            raise HTTPException(status_code=400, detail="禁止访问内网/回环地址")
+
+def _safe_get(url: str, timeout: int = 30):
+    """带 SSRF 防护的 GET：每次跳转前都校验目标，最多跟随 5 次重定向。"""
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    for _ in range(5):
+        _validate_public_url(url)
+        resp = requests.get(url, timeout=timeout, headers=headers, allow_redirects=False)
+        if resp.is_redirect or resp.is_permanent_redirect:
+            location = resp.headers.get("Location")
+            if not location:
+                raise HTTPException(status_code=500, detail="重定向响应缺少 Location")
+            url = urljoin(url, location)
+            continue
+        resp.raise_for_status()
+        return resp
+    raise HTTPException(status_code=500, detail="重定向次数过多")
+
 # ==== 9. 抓取网页 URL 并入库 ====
 class FetchUrlRequest(BaseModel):
     url: str
@@ -300,10 +356,11 @@ def fetch_url(payload: FetchUrlRequest, admin: User = Depends(admin_required)):
     if not url:
         raise HTTPException(status_code=400, detail="请提供 URL")
 
-    # 1. 抓取网页
+    # 1. 抓取网页（_safe_get 内含 SSRF 校验）
     try:
-        resp = requests.get(url, timeout=30, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
-        resp.raise_for_status()
+        resp = _safe_get(url, timeout=30)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"抓取网页失败: {e}")
 
@@ -385,10 +442,11 @@ def crawl_site(payload: FetchUrlRequest, admin: User = Depends(admin_required)):
     if not base_url:
         raise HTTPException(status_code=400, detail="请提供 URL")
 
-    # 1. 抓取首页，提取所有同目录链接
+    # 1. 抓取首页，提取所有同目录链接（_safe_get 内含 SSRF 校验）
     try:
-        resp = requests.get(base_url, timeout=30, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
-        resp.raise_for_status()
+        resp = _safe_get(base_url, timeout=30)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"抓取首页失败: {e}")
 
@@ -404,8 +462,7 @@ def crawl_site(payload: FetchUrlRequest, admin: User = Depends(admin_required)):
             logger.info(f"跳过已抓取过的 URL: {url}")
             continue
         try:
-            page = requests.get(url, timeout=20, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
-            page.raise_for_status()
+            page = _safe_get(url, timeout=20)
             soup = BeautifulSoup(page.text, "html.parser")
             for tag in soup(["script", "style", "nav", "footer", "header", "aside"]):
                 tag.decompose()

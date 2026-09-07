@@ -29,15 +29,20 @@ def reload_vector_db():
     return vector_db
 
 
-def retrieve_context(query: str, k: int = 5, threshold: float = 0.65) -> dict:
+def retrieve_context(query: str, k: int = 5, distance_threshold: float = 0.65) -> dict:
+    """检索最相关片段。FAISS 默认 L2 距离，分数越小越相似，这里过滤掉距离过大（不够相似）的片段。"""
     if vector_db is None:
         logger.warning(f"retrieve_context (query: '{query}', k:{k}): 知识库索引未加载。")
         return {"error": "知识库索引未加载，请先处理知识库文档。"}
     try:
-        logger.info(f"retrieve_context: 正在为查询 '{query}' 检索上下文 (k={k}, 阈值={threshold})...")
+        logger.info(f"retrieve_context: 正在为查询 '{query}' 检索上下文 (k={k}, 距离阈值={distance_threshold})...")
         results = vector_db.similarity_search_with_score(query, k=k)
-        filtered_chunks = [doc.page_content for doc, score in results if score >= threshold]
-        logger.info(f"retrieve_context: 过滤后命中 {len(filtered_chunks)} 个片段（分数阈值 {threshold}）")
+        # L2 距离：越小越相似。原 `score >= threshold` 方向写反了，会留下最不相似的片段。
+        filtered_chunks = [doc.page_content for doc, score in results if score <= distance_threshold]
+        logger.info(
+            f"retrieve_context: 原始 top-{k} 命中距离 {[round(s, 4) for _, s in results]}，"
+            f"过滤后保留 {len(filtered_chunks)} 个片段（距离 <= {distance_threshold}）"
+        )
         return {"retrieved_chunks": filtered_chunks}
     except Exception as e:
         logger.error(f"retrieve_context: 检索上下文时出错 (查询: '{query}', k:{k}): {e}", exc_info=True)
@@ -113,8 +118,8 @@ def prepare_context(query: str):
     return context_chunks, is_comparison, allow_free_gen
 
 
-def _build_prompt(original_query: str, context_chunks: list[str], is_comparison: bool, allow_free_gen: bool) -> str:
-    """根据场景构造发送给 LLM 的提示词。"""
+def _build_prompt(original_query: str, context_chunks: list[str], is_comparison: bool, allow_free_gen: bool, history: str = "") -> str:
+    """根据场景构造发送给 LLM 的提示词。history 为多轮对话历史（仅用于生成，不参与检索）。"""
     context_str = "\n\n---\n\n".join(context_chunks)
 
     if is_comparison:
@@ -135,9 +140,11 @@ def _build_prompt(original_query: str, context_chunks: list[str], is_comparison:
             "如果参考信息中没有答案，请如实说明，不要编造内容。"
         )
 
+    history_block = f"对话历史：\n---\n{history}\n---\n\n" if history else ""
+
     return f"""{prompt_instruction}
 
-参考信息：
+{history_block}参考信息：
 ---
 {context_str}
 ---
@@ -151,48 +158,18 @@ def generate_answer_from_llm(
     original_query: str,
     context_chunks: list[str],
     is_comparison: bool = False,
-    allow_free_gen: bool = False
+    allow_free_gen: bool = False,
+    history: str = ""
 ) -> dict:
     """
     调用 DeepSeek API 生成答案。
-    - 提示词根据上下文情况动态调整，增强回答质量。
+    - 提示词复用 _build_prompt，保证与流式接口一致（技术文档主题）。
     """
     if not DEEPSEEK_API_KEY:
         logger.error("generate_answer_from_llm: DEEPSEEK_API_KEY 未配置。")
         return {"error": "AI 服务配置不完整 (API Key缺失)。"}
 
-    context_str = "\n\n---\n\n".join(context_chunks)
-
-    # === 优化后的 Prompt Instruction，细化对比 / 普通 / 自由生成场景
-    if is_comparison:
-        prompt_instruction = (
-            "你是一个专业的电子产品对比分析师。请根据下方“参考信息”详细对比用户问题中提到的两款产品。"
-            "重点列出它们在性能、功能、外观、特色等方面的差异。请**务必使用标准 Markdown 表格格式**输出对比结果，"
-            "如果信息不足，请如实说明，不要编造内容。"
-            "请以条理清晰的要点或编号列表形式总结。"
-        )
-    elif allow_free_gen:
-        prompt_instruction = (
-            "你是一个乐于助人的AI助手。如果下方“参考信息”为空或无用，请基于常识和推理自由回答用户问题。"
-            "务必在回答开头加上：“【以下为AI自动生成，仅供参考】”。"
-            "如果有“参考信息”，优先使用，答案应专业简洁、直接相关。"
-        )
-    else:
-        prompt_instruction = (
-            "你是一个专业的AI助手。请严格根据下方“参考信息”回答用户问题，确保答案准确、相关、简明扼要。"
-            "如果信息不足，也请如实说明，不要编造内容。"
-        )
-
-    prompt_template = f"""{prompt_instruction}
-
-参考信息：
----
-{context_str}
----
-用户问题：{original_query}
-
-请给出您的详细、专业的回答：
-"""
+    prompt_template = _build_prompt(original_query, context_chunks, is_comparison, allow_free_gen, history)
 
     logger.debug(f"generate_answer_from_llm: 发送给 LLM 的 Prompt:\n{prompt_template}\n")
 
@@ -234,7 +211,7 @@ def generate_answer_from_llm(
         return {"error": f"处理 AI 服务响应时发生未知错误: {e}"}
 
 
-def generate_answer_stream(original_query: str, context_chunks: list[str], is_comparison: bool = False, allow_free_gen: bool = False):
+def generate_answer_stream(original_query: str, context_chunks: list[str], is_comparison: bool = False, allow_free_gen: bool = False, history: str = ""):
     """
     流式生成答案：逐块 yield 文本内容（供 SSE 接口使用）。
     """
@@ -242,7 +219,7 @@ def generate_answer_stream(original_query: str, context_chunks: list[str], is_co
         yield "AI 服务配置不完整 (API Key缺失)。"
         return
 
-    prompt_template = _build_prompt(original_query, context_chunks, is_comparison, allow_free_gen)
+    prompt_template = _build_prompt(original_query, context_chunks, is_comparison, allow_free_gen, history)
 
     headers = {
         "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
@@ -286,9 +263,10 @@ def generate_answer_stream(original_query: str, context_chunks: list[str], is_co
         yield f"处理 AI 服务响应时发生未知错误: {e}"
 
 
-def get_final_answer(query: str) -> dict:
+def get_final_answer(query: str, history: str = "") -> dict:
     """
     核心对话入口：智能判断是否对比问题，是否有可用知识库，智能切换自由生成/基于知识的回答。
+    query 为当前用户问题（用于检索），history 为多轮历史（仅用于生成）。
     """
     logger.info(f"get_final_answer: 开始处理查询: '{query}'")
     is_comparison = False
@@ -314,7 +292,7 @@ def get_final_answer(query: str) -> dict:
     can_rag = len(context_chunks) > 0 and chunks_relevant_to_query(context_chunks, query)
     if not can_rag:
         logger.info("get_final_answer: 知识块无用，直接让AI自由发挥并加标注。")
-        llm_result = generate_answer_from_llm(query, [], is_comparison=is_comparison, allow_free_gen=True)
+        llm_result = generate_answer_from_llm(query, [], is_comparison=is_comparison, allow_free_gen=True, history=history)
         if "error" in llm_result:
             return {"error": llm_result["error"]}
         answer = llm_result.get("answer", "")
@@ -323,7 +301,7 @@ def get_final_answer(query: str) -> dict:
         return {"answer": answer}
 
     # 有可用知识块则优先使用
-    llm_result = generate_answer_from_llm(query, context_chunks, is_comparison=is_comparison)
+    llm_result = generate_answer_from_llm(query, context_chunks, is_comparison=is_comparison, history=history)
     if "error" in llm_result:
         return {"error": llm_result["error"]}
     return {"answer": llm_result.get("answer", "【以下为AI自动生成，仅供参考】AI 未能生成有效的回答。")}

@@ -1,11 +1,33 @@
+# ===== Web 框架 =====
 fastapi
-uvicorn[standard]  # 用于运行 FastAPI 应用
-python-dotenv      # 用于加载 .env 文件
+uvicorn[standard]
+python-multipart      # FastAPI 处理文件上传
+
+# ===== 配置 / 网络 =====
+python-dotenv         # 加载 .env
+requests              # 调用 DeepSeek API / 抓取网页
+
+# ===== 数据库 / ORM =====
+sqlalchemy
+
+# ===== 鉴权（JWT + 密码哈希）=====
+passlib[bcrypt]
+bcrypt==4.0.1         # 与 passlib 1.7.x 兼容；bcrypt>=5 会报 72 字节长度错误
+python-jose[cryptography]   # JWT 编解码
+
+# ===== 数据校验 =====
+email-validator       # pydantic EmailStr 需要
+
+# ===== RAG：LangChain + 向量库 =====
 langchain
 langchain-community
 langchain-ollama
-faiss-cpu          # 或者 faiss-gpu 如果您有兼容的NVIDIA显卡
-requests           # 用于调用外部API，如DeepSeek
-python-multipart   # FastAPI 处理文件上传需要
-# 如果您打算用 Ollama 运行本地大模型作为生成器，而不是DeepSeek，
-# 那么对requests的依赖可能就没那么直接，但通常还是有用的。
+langchain-text-splitters
+faiss-cpu             # 本地 FAISS 向量库（或 faiss-gpu）
+
+# ===== 文档加载 =====
+pypdf                 # PDF 解析（PyPDFLoader）
+
+# ===== 中文分词 / 网页解析 =====
+jieba                 # 中文分词（检索关键词提取、热词统计）
+beautifulsoup4        # HTML 解析（网页抓取）
